@@ -2,7 +2,7 @@ import itertools
 import operator
 import os
 import string
-from collections import namedtuple
+from collections import deque, namedtuple
 
 from . import data
 
@@ -30,6 +30,12 @@ def write_tree(directory="."):
             for name, oid, type_ in sorted(entries)
         )
     return data.hash_object(tree.encode(), "tree")
+
+
+def create_branch(name, oid):
+    data.update_ref(
+        "refs/heads/{}".format(name), data.RefValue(symbolic=False, value=oid)
+    )
 
 
 def _iter_tree_entries(oid):
@@ -85,7 +91,7 @@ def _empty_current_directory():
 def checkout(oid):
     commit = get_commit(oid)
     read_tree(commit.tree)
-    data.get_ref("HEAD")
+    data.update_ref("HEAD", data.RefValue(symbolic=False, value=oid))
 
 
 def commit(message):
@@ -93,19 +99,21 @@ def commit(message):
     commit += "\n"
     commit += "{}\n".format(message)
 
-    HEAD = data.get_ref("HEAD")
+    HEAD = data.get_ref("HEAD").value
     if HEAD:  # save parent commit
         commit += "parent {}\n".format(HEAD)
 
     oid = data.hash_object(commit.encode(), "commit")
 
-    data.set_ref("HEAD")
+    data.update_ref("HEAD", data.RefValue(symbolic=False, value=oid))
 
     return oid
 
 
 def create_tag(name, oid):
-    data.update_ref("refs/tags/{}".format(name), oid)
+    data.update_ref(
+        "refs/tags/{}".format(name), data.RefValue(symbolic=False, value=oid)
+    )
 
 
 def get_commit(oid):
@@ -141,8 +149,9 @@ def get_oid(name):
         "refs/heads/{}",
     ]
     for ref in refs_to_try:
-        if data.get_ref(ref.format(name)):
-            return data.get_ref(ref)
+        _ref = ref.format(name)
+        if data.get_ref(_ref).value:
+            return data.get_ref(_ref).value
 
     # Name is SHA1
     is_hex = all(c in string.hexdigits for c in name)
@@ -150,3 +159,18 @@ def get_oid(name):
         return name
 
     assert False, "Unknown name {}".format(name)
+
+
+def iter_commits_and_parents(oids):
+    oids = deque(oids)
+    visited = set()
+
+    while oids:
+        oid = oids.popleft()
+        if not oid or oid in visited:
+            continue
+        visited.add(oid)
+        yield oid
+
+        commit = get_commit(oid)
+        oids.appendleft(commit.parent)

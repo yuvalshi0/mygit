@@ -1,5 +1,6 @@
 import argparse
 import os
+import subprocess
 import sys
 import textwrap
 
@@ -60,6 +61,14 @@ def parse_args():
     tag_parser.add_argument("name")
     tag_parser.add_argument("oid", type=oid, nargs="?", default="@")
 
+    k_parser = commands.add_parser("k")
+    k_parser.set_defaults(func=k)
+
+    branch_parser = commands.add_parser("branch")
+    branch_parser.set_defaults(func=branch)
+    branch_parser.add_argument("name")
+    branch_parser.add_argument("start_point", default="@", type=oid, nargs="?")
+
     return parser.parse_args()
 
 
@@ -115,3 +124,32 @@ def checkout(args):
 def tag(args):
     oid = args.oid
     base.create_tag(args.name, oid)
+
+
+def k(args):
+    dot = "digraph commits {\n"
+
+    oids = set()
+    for refname, ref in data.iter_refs():
+        dot += f'"{refname}" [shape=note]\n'
+        dot += f'"{refname}" -> "{ref.value}"\n'
+        oids.add(ref)
+
+    for oid in base.iter_commits_and_parents(oids):
+        commit = base.get_commit(oid)
+        dot += f'"{oid}" [shape=box style=filled label="{oid[:10]}"]\n'
+        if commit.parent:
+            dot += f'"{oid}" -> "{commit.parent}"\n'
+
+    dot += "}"
+    print(dot)
+
+    with subprocess.Popen(
+        ["dot", "-Tgtk"], stdin=subprocess.PIPE
+    ) as proc:  # requires gtk
+        proc.communicate(dot.encode())
+
+
+def branch(args):
+    base.create_branch(args.name, args.start_point)
+    print("Branch {} created at {}".format(args.name, args.start_point[:10]))
