@@ -1,6 +1,7 @@
 import itertools
 import operator
 import os
+import string
 from collections import namedtuple
 
 from . import data
@@ -84,7 +85,7 @@ def _empty_current_directory():
 def checkout(oid):
     commit = get_commit(oid)
     read_tree(commit.tree)
-    data.set_HEAD(oid)
+    data.get_ref("HEAD")
 
 
 def commit(message):
@@ -92,20 +93,19 @@ def commit(message):
     commit += "\n"
     commit += "{}\n".format(message)
 
-    HEAD = data.get_HEAD()
+    HEAD = data.get_ref("HEAD")
     if HEAD:  # save parent commit
         commit += "parent {}\n".format(HEAD)
 
     oid = data.hash_object(commit.encode(), "commit")
 
-    data.set_HEAD(oid)
+    data.set_ref("HEAD")
 
     return oid
 
 
 def create_tag(name, oid):
-    # TODO Actually create the tag
-    pass
+    data.update_ref("refs/tags/{}".format(name), oid)
 
 
 def get_commit(oid):
@@ -128,3 +128,25 @@ def get_commit(oid):
 
 def is_ignored(path):
     return ".mygit" in path.split("/")
+
+
+def get_oid(name):
+    if name == "@":
+        name = "HEAD"
+    # Name is ref
+    refs_to_try = [
+        "{}",
+        "refs/{}",
+        "refs/tags/{}",
+        "refs/heads/{}",
+    ]
+    for ref in refs_to_try:
+        if data.get_ref(ref.format(name)):
+            return data.get_ref(ref)
+
+    # Name is SHA1
+    is_hex = all(c in string.hexdigits for c in name)
+    if len(name) == 40 and is_hex:
+        return name
+
+    assert False, "Unknown name {}".format(name)

@@ -29,12 +29,15 @@ def get_object(oid, expected="blob"):
     return content
 
 
-def set_HEAD(oid):
-    with open("{}/HEAD".format(MYGIT_DIR), "w") as f:
-        f.write(oid)
+def update_ref(ref, oid):
+    ref_path = "{}/{}".format(MYGIT_DIR, ref)
+    if os.path.isfile(ref_path):
+        with open(ref_path, "w") as f:
+            f.write(oid)
 
 
-def get_HEAD():
-    if os.path.isfile("{}/HEAD".format(MYGIT_DIR)):
-        with open("{}/HEAD".format(MYGIT_DIR)) as f:
+def get_ref(ref):
+    ref_path = "{}/{}".format(MYGIT_DIR, ref)
+    if os.path.isfile(ref_path):
+        with open(ref_path) as f:
             return f.read().strip()
